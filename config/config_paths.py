@@ -1,0 +1,5 @@
+KEYWORD_MAP_PATH = "config/keyword_map.json"
+TEMPLATE_PATH = "config/templates.json"
+EMOTION_WORDS_PATH = "config/emotion_words.json"
+SPEECH_STYLE_PATH = "config/speech_styles.json"
+PROMPT_PATH = "config/prompt.txt"

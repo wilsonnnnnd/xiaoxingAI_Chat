@@ -1,33 +1,32 @@
 import re
+import json
+import os
+from config.config_paths import KEYWORD_MAP_PATH, TEMPLATE_PATH
 
-# 关键词词典，映射到记忆的字段名
-KEYWORD_MAP = {
-    "喜欢": "喜欢的东西",
-    "讨厌": "讨厌的东西",
-    "生日": "生日",
-    "来自": "家乡",
-    "家乡": "家乡",
-    "听": "喜欢的歌手",
-}
 
-# 通用模板正则（匹配句子结构）
-TEMPLATES = [
-    r"我\s*{key}\s*([^\s，。！]*)",
-    r"我\s*的{key}\s*是\s*([^\s，。！]*)",
-    r"我\s*最{key}\s*的是\s*([^\s，。！]*)",
-    r"我\s*总是\s*{key}\s*([^\s，。！]*)",
-    r"我\s*(不)?太{key}\s*([^\s，。！]*)",
-]
+def load_json(path: str) -> dict | list:
+    if not os.path.exists(path):
+        print(f"[配置缺失] {path}")
+        return {}
+    with open(path, "r", encoding="utf-8") as f:
+        return json.load(f)
 
-def extract_memory(text):
+# 加载配置
+keyword_map = load_json(KEYWORD_MAP_PATH)
+templates = load_json(TEMPLATE_PATH)
+
+def extract_memory(text: str, keyword_map_override=None, templates_override=None):
     results = []
-    for key, field in KEYWORD_MAP.items():
-        for template in TEMPLATES:
-            pattern = template.format(key=key)
+    local_map = keyword_map_override or keyword_map
+    local_templates = templates_override or templates
+
+    for key, field in local_map.items():
+        for template in local_templates:
+            pattern = template.format(key=re.escape(key))
             match = re.search(pattern, text)
             if match:
-                # 提取匹配内容（支持含“我不太喜欢xxx”这种否定的情况）
-                value = match.group(2) if match.lastindex >= 2 else match.group(1)
-                results.append((field, value.strip()))
-                break  # 同一个关键词匹配一次就够
+                value = match.group(2) if match.lastindex and match.lastindex >= 2 else match.group(1)
+                if value:
+                    results.append((field, value.strip()))
+                    break  # 命中一次即跳出
     return results

@@ -1,0 +1,50 @@
+{
+  "positive": {
+    "style": "cheerful",
+    "voice": "zh-CN-XiaoyiNeural",
+    "rate": "+10%",
+    "volume": "+2dB"
+  },
+  "happy": {
+    "style": "cheerful",
+    "voice": "zh-CN-XiaoyiNeural",
+    "rate": "+15%",
+    "volume": "+3dB"
+  },
+  "neutral": {
+    "style": "friendly",
+    "voice": "zh-CN-XiaoyiNeural",
+    "rate": "0%",
+    "volume": "0dB"
+  },
+  "negative": {
+    "style": "sad",
+    "voice": "zh-CN-XiaoyiNeural",
+    "rate": "-10%",
+    "volume": "-2dB"
+  },
+  "sad": {
+    "style": "sad",
+    "voice": "zh-CN-XiaoyiNeural",
+    "rate": "-15%",
+    "volume": "-4dB"
+  },
+  "angry": {
+    "style": "angry",
+    "voice": "zh-CN-XiaoyiNeural",
+    "rate": "+5%",
+    "volume": "+0dB"
+  },
+  "calm": {
+    "style": "narration-professional",
+    "voice": "zh-CN-XiaoyiNeural",
+    "rate": "-5%",
+    "volume": "-1dB"
+  },
+  "_default": {
+    "style": "friendly",
+    "voice": "zh-CN-XiaoyiNeural",
+    "rate": "0%",
+    "volume": "0dB"
+  }
+}
