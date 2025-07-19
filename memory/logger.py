@@ -1,0 +1,1 @@
+from chat_logger import log_conversation as append_to_log
