@@ -22,11 +22,5 @@ def start_summary_scheduler_thread(shared_history: list):
             schedule.run_pending()
             time.sleep(60)
 
-
-    summary = summarize_and_store(shared_history)
-    if summary:
-        print("✅ 每日摘要已保存")
-    else:
-        print("⚠️ 每日摘要生成失败，可能无对话记录")
     thread = threading.Thread(target=scheduler_loop, daemon=True)
     thread.start()

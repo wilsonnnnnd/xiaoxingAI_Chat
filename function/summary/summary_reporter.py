@@ -5,9 +5,7 @@ from collections import Counter
 import matplotlib.pyplot as plt
 from wordcloud import WordCloud
 
-from config.config import SUMMARY_LOG_PATH, CHART_OUTPUT_DIR, MARKDOWN_DIR
-
-
+from config.config import SUMMARY_LOG_PATH, CHART_OUTPUT_DIR, MARKDOWN_DIR, WORD_CLOUD_COLOR, WORD_CLOUD_HEIGHT, WORD_CLOUD_WIDTH, WORD_FONT_PATH
 
 def export_summaries_to_markdown():
     if not os.path.exists(SUMMARY_LOG_PATH):
@@ -51,7 +49,12 @@ def generate_summary_charts():
 
     # 摘要词云图
     all_text = " ".join(entry["summary"] for entry in summaries)
-    wordcloud = WordCloud(width=800, height=400, background_color="white").generate(all_text)
+    wordcloud = WordCloud(
+        width=WORD_CLOUD_WIDTH,
+        height=WORD_CLOUD_HEIGHT,
+        background_color=WORD_CLOUD_COLOR,
+        font_path=WORD_FONT_PATH  # 指定中文字体
+    ).generate(all_text)
     plt.figure(figsize=(10, 5))
     plt.imshow(wordcloud, interpolation="bilinear")
     plt.axis("off")

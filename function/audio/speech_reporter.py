@@ -3,12 +3,9 @@ import json
 from datetime import datetime
 from collections import Counter
 import re
-import threading
 import matplotlib.pyplot as plt
-import schedule
-import time
-from config.config import LOG_SPEECH_PATH, AUDIO_DIR,MARKDOWN_DIR, MAX_AUDIO_FILES
-
+from config.config import LOG_SPEECH_PATH, AUDIO_DIR, MARKDOWN_DIR, MAX_AUDIO_FILES
+from function.audio.stopwords import STOP_WORDS
 
 os.makedirs(MARKDOWN_DIR, exist_ok=True)
 
@@ -32,7 +29,8 @@ def generate_speech_report():
             path = entry.get("path", "")
             words = re.findall(r'\w+', text)
             for word in words:
-                word_counter[word] += 1
+                if word not in STOP_WORDS:
+                    word_counter[word] += 1
 
             if date not in date_map:
                 date_map[date] = []
@@ -75,17 +73,3 @@ def generate_speech_report():
                 except Exception as e:
                     print("❌ 删除失败：", f, e)
             print(f"🧹 已清理 {len(files_to_delete)} 个旧音频文件")
-
-
-def start_speech_report_scheduler_thread():
-    """
-    启动每日语音报告调度线程（每天23:30自动执行）
-    """
-    def loop():
-        schedule.every().day.at("23:30").do(generate_speech_report)
-        print("🕓 已启动每日语音报告线程（每天23:30）")
-        while True:
-            schedule.run_pending()
-            time.sleep(60)
-
-    threading.Thread(target=loop, daemon=True).start()

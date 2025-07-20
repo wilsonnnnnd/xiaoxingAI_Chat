@@ -20,7 +20,7 @@ def extract_memory(text: str, keyword_map_override=None, templates_override=None
         for template in local_templates:
             try:
                 pattern = template.format(key=re.escape(key))
-                match = re.search(pattern, text)
+                match = re.search(pattern, text, flags=re.IGNORECASE)  # 忽略大小写匹配
                 if match:
                     # 提取所有 group 中最后一个非 None 的组
                     value = next((g for g in reversed(match.groups()) if g), None)

@@ -1,8 +1,8 @@
 import threading
 import time
 import schedule
-from function.summary_manager import summarize_and_store
-from function.speech_reporter import generate_speech_report
+from function.summary.summary_manager import summarize_and_store
+from function.audio.speech_reporter import generate_speech_report
 
 
 def start_summary_scheduler_thread(chat_history):

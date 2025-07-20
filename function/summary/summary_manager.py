@@ -29,7 +29,11 @@ def summarize_chat_history(chat_history: list[str], api_url: str = API_URL) -> s
     })
 
     if response.status_code == 200:
-        content = response.json().get("content", "").strip()
+        try:
+            content = response.json().get("content", "").strip()
+        except Exception as e:
+            print("[解析失败]", e, response.text)
+            content = ""
         return content
     else:
         print("❌ 总结失败：", response.status_code, response.text)
