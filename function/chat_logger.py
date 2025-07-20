@@ -2,7 +2,8 @@ import os
 import json
 from datetime import datetime
 
-DEFAULT_LOG_DIR = "memory/logs"
+from config.config import DEFAULT_LOG_DIR
+
 
 def ensure_log_dir(log_dir: str = DEFAULT_LOG_DIR) -> str:
     os.makedirs(log_dir, exist_ok=True)

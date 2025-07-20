@@ -3,9 +3,46 @@ import html
 import os
 import platform
 import time
+import asyncio
+import queue
+import threading
+import json
+from datetime import datetime
 from edge_tts import Communicate
+from config.config import LOG_SPEECH_PATH, AUDIO_DIR
+
+
+# 音频播放队列（用于防止多段语音重叠）
+speak_queue = queue.Queue()
+
+# 启动独立线程用于串行播放语音
+def _start_speak_worker():
+    def worker():
+        while True:
+            audio_path = speak_queue.get()
+            if not audio_path:
+                continue
+            try:
+                if platform.system() == "Windows":
+                    os.system(f'start "" "{audio_path}"')
+                elif platform.system() == "Darwin":
+                    os.system(f'afplay "{audio_path}"')
+                else:
+                    os.system(f'mpg123 "{audio_path}"')
+                print(f"[🔊 播放完成] {audio_path}")
+            except Exception as e:
+                print(f"[❌ 播放出错] {e}")
+            speak_queue.task_done()
+
+    threading.Thread(target=worker, daemon=True).start()
+
+# 启动线程
+_start_speak_worker()
 
 def build_ssml(text, voice, style, rate, volume):
+    """
+    构建标准 SSML 字符串
+    """
     return f"""
 <speak version='1.0' xml:lang='zh-CN'>
   <voice name='{voice}' style='{style}'>
@@ -13,6 +50,19 @@ def build_ssml(text, voice, style, rate, volume):
   </voice>
 </speak>
 """
+
+def log_speech_playback(text: str, audio_path: str):
+    """
+    写入语音播放日志到 JSONL 文件
+    """
+    log_path = LOG_SPEECH_PATH
+    entry = {
+        "text": text,
+        "path": audio_path,
+        "timestamp": datetime.now().isoformat()
+    }
+    with open(log_path, "a", encoding="utf-8") as f:
+        f.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
 async def speak(
     text: str,
@@ -22,14 +72,21 @@ async def speak(
     volume: str = "0dB",
     remove_brackets: bool = True
 ):
+    """
+    使用 edge-tts 合成语音并排入播放队列
+    """
     original_text = text.strip()
+
+    # 可选去除括号内容（如 {你好吗} -> 你好吗）
     if remove_brackets:
         cleaned_text = re.sub(r"[{}]", "", original_text)
     else:
         cleaned_text = original_text
 
+    # HTML 转义，防止非法字符影响 SSML
     safe_text = html.escape(cleaned_text)
 
+    # 控制台输出日志
     print("\n[🗣️ 合成语音（SSML 模式）]")
     print(f"Voice  : {voice}")
     print(f"Style  : {style}")
@@ -42,22 +99,35 @@ async def speak(
         # 构建 SSML 文本
         ssml_text = build_ssml(safe_text, voice, style, rate, volume)
 
-        # 自动生成唯一音频文件名
-        output_dir = "memory/audio"
+        # 创建音频输出目录
+        output_dir = AUDIO_DIR
         os.makedirs(output_dir, exist_ok=True)
+
+        # 使用时间戳命名文件，防止覆盖
         filename = f"output_{int(time.time() * 1000)}.mp3"
         output_path = os.path.join(output_dir, filename)
 
-        # 使用 SSML 合成（不需要 ssml=True）
+        # 使用 edge-tts 合成语音并保存
         communicate = Communicate(ssml_text, voice=voice)
         await communicate.save(output_path)
 
-        # 播放语音
-        if platform.system() == "Windows":
-            os.system(f'start {output_path}')
-        elif platform.system() == "Darwin":
-            os.system(f'afplay {output_path}')
-        else:
-            os.system(f'mpg123 {output_path}')
+        # ✅ 合成后立即校验文件是否有效
+        if not os.path.exists(output_path):
+            print("❌ 合成失败：音频文件未生成")
+            return
+
+        file_size = os.path.getsize(output_path)
+        if file_size < 1024:
+            print(f"⚠️ 检测到音频文件异常（仅 {file_size} 字节），自动删除：{output_path}")
+            os.remove(output_path)
+            return
+
+        # ✅ 写入播放日志
+        print(f"[✅ 合成完成] 文件大小：{file_size} 字节 -> 入队播放：{output_path}")
+        log_speech_playback(cleaned_text, output_path)
+
+        # ✅ 加入播放队列
+        speak_queue.put(output_path)
+
     except Exception as e:
-        print("[语音合成出错]", e)
+        print("[❌ 语音合成出错]", e)

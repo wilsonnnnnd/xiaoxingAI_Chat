@@ -1,38 +1,61 @@
 import asyncio
+import threading
 import requests
-from config.config_paths import PROMPT_PATH
+from config.config import API_URL, HISTORY_LIMIT, MAX_HISTORY, PROMPT_PATH,MEMORY_PATH
 from function.chat_logger import log_conversation
 from function.emotion_utils import EmotionTracker
 from function.speech_utils import speak
-from memory.memory_tools import analyze_input, recall_input
-from memory.memory import Memory
+from function.memory_tools import analyze_input, recall_input
+from function.memory import Memory
+from function.summary_manager import load_latest_summary, summarize_and_store
 from function.voice_style_utils import get_speech_config_by_emotion
+from function.daily_summary_thread import start_summary_scheduler_thread
+from function.scheduler_manager import (
+    start_summary_scheduler_thread,
+    start_speech_report_scheduler_thread
+)
 
 
-MEMORY_PATH = "memory/store/memory_store.json"
-API_URL = "http://127.0.0.1:8000/v1/completions"
-HISTORY_LIMIT = 5  # 限制上下文轮数
 
+
+# 初始化模块实例
 memory = Memory(MEMORY_PATH)
 emotion_tracker = EmotionTracker()
-chat_history = []
+chat_history = []  # 多轮上下文缓存（全局共享）
 
+def build_prompt(user_input: str, system_prompt: str = "", history: list = [], summary: str = "") -> str:
+    """
+    构建用于 LLM 请求的完整 prompt，包含：
+    - 系统角色设定
+    - 对话摘要（可选）
+    - 最近几轮对话历史
+    - 当前用户输入
+    """
+    history_text = "".join(
+        f"用户：{entry['user']}\n小星：{entry['bot']}\n" for entry in history
+    )
+    summary_text = f"\n📝 最近的对话总结（小星偷偷记下来的）～：\n{summary}\n" if summary else ""
 
-def build_prompt(user_input: str) -> str:
+    return (
+        system_prompt.strip()
+        + summary_text
+        + "\n🌟 下面是我们刚刚的对话记录：\n"
+        + history_text
+        + f"用户：{user_input}\n小星："
+    )
+
+def ask_llama_ai(user_input: str, summary: str = "") -> str:
+    """
+    向本地 LLaMA 模型 API 发起请求，获取 AI 回复
+    """
     try:
         with open(PROMPT_PATH, encoding="utf-8") as f:
             system_prompt = f.read()
     except:
         system_prompt = ""
 
-    history_text = "".join(
-        f"用户：{entry['user']}\n小星：{entry['bot']}\n" for entry in chat_history[-HISTORY_LIMIT:]
-    )
-    return system_prompt.strip() + "\n" + history_text + f"用户：{user_input}\n小星："
+    prompt = build_prompt(user_input, system_prompt, chat_history[-HISTORY_LIMIT:], summary)
 
-
-def ask_llama_ai(user_input: str) -> str:
-    prompt = build_prompt(user_input)
     try:
         response = requests.post(API_URL, json={
             "prompt": prompt,
@@ -43,50 +66,66 @@ def ask_llama_ai(user_input: str) -> str:
             "repeat_penalty": 1.1,
             "stop": ["用户："]
         }, timeout=60)
+
         result = response.json()
         return result.get("content", result.get("choices", [{}])[0].get("text", "")).strip()
+
     except Exception as e:
         print("[小星 AI 接口出错]", e)
-        return ""
+        return "我好像没连上大脑…请稍后再试一次。"
 
 
 async def main():
-    print("小星已启动。")
+    start_summary_scheduler_thread(chat_history)
+    start_speech_report_scheduler_thread()
+    
+    print("\n🌟 小星已启动，开始陪你聊天啦～")
+
+    # 尝试读取上次的摘要作为初始化背景
+    summary = load_latest_summary()
 
     while True:
-        user_input = input("你：").strip()
+        user_input = input("\n你：").strip()
         if user_input.lower() in ["exit", "quit", "退出"]:
+            print("👋 小星下线了，再见～")
             break
 
+        # 特殊指令触发摘要总结（例如：“总结一下”、“概括”等）
+        if any(kw in user_input.lower() for kw in ["总结", "概括", "刚刚聊了什么"]):
+            summary = summarize_and_store(chat_history)
+            print("\n🧠 小星（总结）：", summary)
+            continue
+
+        # 从记忆模块尝试生成回复（如关键词触发等）
         response = analyze_input(user_input, memory)
 
-        # 情绪识别与记忆
+        # 情绪识别
         emotion, keyword = emotion_tracker.detect_emotion(user_input)
         if keyword:
             memory.save_emotion(keyword, emotion)
-
         if not emotion:
             emotion = "neutral"
 
+        # 如果未命中记忆逻辑，则调用模型生成
         if not response:
             response = recall_input(user_input, memory)
         if not response:
-            response = ask_llama_ai(user_input)
+            response = ask_llama_ai(user_input, summary)
 
-        final_reply = response
-        print("小星：" + final_reply.strip())
+        final_reply = response.strip()
+        print("小星：" + final_reply)
 
-        # 日志记录
-        log_conversation(user_input, final_reply.strip(), extra_fields={
+        # 聊天记录写入日志
+        log_conversation(user_input, final_reply, extra_fields={
             "emotion": emotion,
             "keyword": keyword or ""
         })
 
-        # 情绪驱动语音配置
+        # 情绪驱动语音合成
         speech_config = get_speech_config_by_emotion(emotion)
         try:
             await speak(
-                final_reply.strip(),
+                final_reply,
                 voice=speech_config["voice"],
                 style=speech_config["style"],
                 rate=speech_config["rate"],
@@ -95,13 +134,15 @@ async def main():
         except Exception as e:
             print("[语音合成出错]", e)
 
-        # 更新上下文历史
+        # 更新对话历史并限制长度
         chat_history.append({
             "user": user_input,
-            "bot": response.strip()
+            "bot": final_reply
         })
+        if len(chat_history) > MAX_HISTORY:
+            chat_history.pop(0)
 
-        # 打印情绪统计
+        # 显示实时情绪统计
         print(emotion_tracker.get_summary())
 
 

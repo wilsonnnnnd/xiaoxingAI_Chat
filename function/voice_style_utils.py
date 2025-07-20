@@ -1,6 +1,6 @@
 import json
 import os
-from config.config_paths import SPEECH_STYLE_PATH
+from config.config import SPEECH_STYLE_PATH
 
 def load_speech_config(path: str = SPEECH_STYLE_PATH) -> dict:
     if not os.path.exists(path):

@@ -1,32 +1,46 @@
-from function.emotion_words import EMOTION_WORDS
-from datetime import datetime
+import re
+from function.emotion_words import load_emotion_words
 
 class EmotionTracker:
     def __init__(self):
-        self.score = {
+        self.emotion_count = {
             "positive": 0,
             "negative": 0,
             "neutral": 0
         }
+        self.latest_keyword = None
+        self.emotion_words = load_emotion_words()  # 使用缓存加载词典
 
-    def detect_emotion(self, text: str) -> tuple[str | None, str | None]:
-        for category, words in EMOTION_WORDS.items():
+    def detect_emotion(self, text: str):
+        """
+        根据情绪词判断文本情绪类别
+        返回 (emotion, keyword)，若无匹配则为 ("neutral", None)
+        """
+        for category, words in self.emotion_words.items():
             for word in words:
                 if word in text:
-                    self.score[category] += 1
+                    self.emotion_count[category] += 1
+                    self.latest_keyword = word
                     return category, word
-        self.score["neutral"] += 1
+        self.emotion_count["neutral"] += 1
         return "neutral", None
 
-    def get_summary(self, use_emoji: bool = True) -> str:
-        if use_emoji:
-            return (
-                f"当前情绪累积：😊正向 {self.score['positive']}，"
-                f"😟负向 {self.score['negative']}，😐中性 {self.score['neutral']}"
-            )
-        else:
-            return f"Emotion summary - Positive: {self.score['positive']}, Negative: {self.score['negative']}, Neutral: {self.score['neutral']}"
+    def get_summary(self) -> str:
+        """
+        返回实时情绪统计摘要字符串
+        """
+        return (
+            f"🧠 情绪统计 ｜ 正面：{self.emotion_count['positive']} ｜ "
+            f"负面：{self.emotion_count['negative']} ｜ 中性：{self.emotion_count['neutral']}"
+        )
 
     def reset(self):
-        for key in self.score:
-            self.score[key] = 0
+        """
+        重置统计计数
+        """
+        self.emotion_count = {
+            "positive": 0,
+            "negative": 0,
+            "neutral": 0
+        }
+        self.latest_keyword = None
