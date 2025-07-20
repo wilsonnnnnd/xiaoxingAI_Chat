@@ -1,6 +1,7 @@
 import re
+from config.config import TEMPLATE_PATH
 from function.memory import Memory
-from config.config import TEMPLATES_PATH
+
 
 # 偏好关键词规则定义：关键词 -> [回复模板, 情绪标签（可选）]
 PREFERENCE_RULES = {
@@ -17,7 +18,7 @@ def analyze_input(user_input: str, memory: Memory) -> str:
     根据用户输入分析偏好关键词，自动提取并记忆
     """
     for key, (reply_template, _) in PREFERENCE_RULES.items():
-        for template in TEMPLATES_PATH:
+        for template in TEMPLATE_PATH:
             pattern = template.replace("{key}", key)
             match = re.search(pattern, user_input)
             if match:
