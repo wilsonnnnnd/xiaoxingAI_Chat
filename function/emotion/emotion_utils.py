@@ -1,40 +1,75 @@
-from function.emotion.emotion_dict_db import EmotionDictionaryDB
+import sqlite3
+from datetime import datetime
+from collections import Counter
+
+DB_PATH = "xiaoxing_memory.db"  # 可全局配置或从 config 导入
+
+# 情绪分析工具类
+
 
 class EmotionTracker:
-    def __init__(self):
-        self.emotion_count = {
-            "positive": 0,
-            "negative": 0,
-            "neutral": 0
-        }
-        self.latest_keyword = None
+    def __init__(self, db_path: str = DB_PATH):
+        self.db_path = db_path
+        self.summary = []
 
-        db = EmotionDictionaryDB()
-        self.emotion_words = db.load_emotion_words()
-        db.close()
+    def detect_emotion(self, text: str) -> tuple[str, str]:
+        """
+        从 text 中找出第一个命中的情绪词，并返回 (emotion, keyword)
+        如果没有命中，则返回 ("neutral", "")
+        """
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            cursor.execute("SELECT word, emotion FROM emotion_dictionary")
+            rows = cursor.fetchall()
+            conn.close()
 
-    def detect_emotion(self, text: str):
-        found_keywords = {"positive": [], "negative": [], "neutral": []}
-
-        for category, words in self.emotion_words.items():
-            for word in words:
+            for word, emotion in rows:
                 if word in text:
-                    found_keywords[category].append(word)
+                    self.summary.append(emotion)
+                    print(f"[💡 情绪识别] '{word}' → {emotion}")
+                    return emotion, word
 
-        for category in found_keywords:
-            self.emotion_count[category] += len(found_keywords[category])
+        except Exception as e:
+            print("[❌ 情绪识别错误]", e)
 
-        dominant = max(found_keywords.items(), key=lambda x: len(x[1]))
-        dominant_emotion = dominant[0] if dominant[1] else "neutral"
-        self.latest_keyword = dominant[1][0] if dominant[1] else None
-        return dominant_emotion, self.latest_keyword
+        self.summary.append("neutral")
+        return "neutral", ""
 
-    def get_summary(self) -> str:
-        return (
-            f"🧠 情绪统计 ｜ 正面：{self.emotion_count['positive']} ｜ "
-            f"负面：{self.emotion_count['negative']} ｜ 中性：{self.emotion_count['neutral']}"
-        )
+    def get_summary(self) -> dict:
+        """
+        获取当前对话的情绪分布统计
+        """
+        return dict(Counter(self.summary))
 
-    def reset(self):
-        self.emotion_count = {"positive": 0, "negative": 0, "neutral": 0}
-        self.latest_keyword = None
+
+# 保存关键词情绪到 emotions 表（偏好记忆）
+def save_emotion_keyword(keyword: str, emotion: str, db_path: str = DB_PATH):
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        cursor.execute('''
+            INSERT INTO emotions (keyword, emotion, timestamp)
+            VALUES (?, ?, ?)
+        ''', (keyword, emotion, datetime.now().isoformat()))
+        conn.commit()
+        conn.close()
+        print(f"[🧠 记忆] 已保存关键词情绪：'{keyword}' -> {emotion}")
+    except Exception as e:
+        print("[❌ 记忆错误] 无法保存情绪信息：", e)
+
+
+# 写入整句情绪分析日志（emotion_log 表）
+def log_emotion_analysis(content: str, emotion: str, db_path: str = DB_PATH):
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        cursor.execute('''
+            INSERT INTO emotion_log (content, emotion, timestamp)
+            VALUES (?, ?, ?)
+        ''', (content, emotion, datetime.now().isoformat()))
+        conn.commit()
+        conn.close()
+        print(f"[📥 情绪日志] 已记录：'{content}' → {emotion}")
+    except Exception as e:
+        print("[❌ 日志错误] emotion_log 写入失败：", e)

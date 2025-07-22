@@ -26,7 +26,6 @@ def _start_speak_worker():
                     subprocess.run(["afplay", audio_path])
                 else:
                     subprocess.run(["mpg123", audio_path])
-                print(f"[🔊 播放完成] {audio_path}")
             except Exception as e:
                 print(f"[❌ 播放出错] {e}")
             speak_queue.task_done()

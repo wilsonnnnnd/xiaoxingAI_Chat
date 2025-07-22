@@ -19,6 +19,11 @@ MARKDOWN_DIR = os.path.join("data", "markdown")
 URL="http://127.0.0.1:8000"
 API_URL = URL + "/v1/completions"
 
+
+# token limits
+MAX_SUMMARY_TOKENS = 300
+MAX_HISTORY_ROUNDS = 5
+
 # chat configuration
 HISTORY_LIMIT = 5
 MAX_HISTORY = 20

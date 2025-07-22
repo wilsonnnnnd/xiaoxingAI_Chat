@@ -8,9 +8,15 @@ def load_preference_rules() -> dict:
     conn.close()
     return rules
 
-def load_preference_templates() -> list:
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.execute("SELECT pattern FROM preference_template")
-    templates = [row[0] for row in cursor.fetchall()]
+def load_keyword_templates(db_path=DB_PATH) -> dict:
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    cursor.execute("SELECT type, keyword FROM preference_template")
+    result = cursor.fetchall()
     conn.close()
-    return templates
+
+    keywords = {"preference": [], "negative": [], "recall": []}
+    for type_, keyword in result:
+        if type_ in keywords:
+            keywords[type_].append(keyword)
+    return keywords

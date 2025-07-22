@@ -43,9 +43,9 @@ def log_conversation(user_text: str, bot_text: str, extra_fields: dict = None):
     logger = ChatLogger()
     tags = [f"{extra_fields.get('emotion')}", f"{extra_fields.get('keyword')}"] if extra_fields else None
     logger.log(
-        role="user", content=user_text, tags=tags, topic="聊天"
+        role="user", content=user_text, tags=tags, topic="Chat"
     )
     logger.log(
-        role="bot", content=bot_text, tags=tags, topic="聊天"
+        role="bot", content=bot_text, tags=tags, topic="Chat"
     )
     logger.close()
