@@ -1,32 +1,51 @@
-import os
+import sqlite3
 import json
 from datetime import datetime
+from typing import Optional, List
+from config.config import DB_PATH
 
-from config.config import DEFAULT_LOG_DIR
+class ChatLogger:
+    def __init__(self, db_path=DB_PATH):
+        self.conn = sqlite3.connect(db_path)
+        self.conn.row_factory = sqlite3.Row
+
+    def log(self, role: str, content: str,
+            topic: Optional[str] = None,
+            tags: Optional[List[str]] = None,
+            context_version: int = 1,
+            is_deleted: int = 0) -> int:
+        """
+        记录一条对话到 chat_log 表，并返回其 chat_log_id
+        """
+        tags_json = json.dumps(tags, ensure_ascii=False) if tags else None
+        self.conn.execute("""
+            INSERT INTO chat_log (role, content, topic, tags, context_version, is_deleted, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (
+            role,
+            content,
+            topic,
+            tags_json,
+            context_version,
+            is_deleted,
+            datetime.now().isoformat(timespec="seconds")
+        ))
+        self.conn.commit()
+        return self.conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+
+    def close(self):
+        self.conn.close()
 
 
-def ensure_log_dir(log_dir: str = DEFAULT_LOG_DIR) -> str:
-    os.makedirs(log_dir, exist_ok=True)
-    return log_dir
 
-def get_log_file_path(log_dir: str = DEFAULT_LOG_DIR) -> str:
-    date_str = datetime.now().strftime("%Y-%m-%d")
-    return os.path.join(log_dir, f"chat_{date_str}.jsonl")
-
-def log_conversation(user_input: str, assistant_reply: str, log_dir: str = DEFAULT_LOG_DIR, extra_fields: dict = None) -> str:
-    ensure_log_dir(log_dir)
-    timestamp = datetime.now().isoformat(timespec="seconds")
-
-    log_entry = {
-        "timestamp": timestamp,
-        "user": user_input,
-        "xiaoxing": assistant_reply
-    }
-
-    if extra_fields:
-        log_entry.update(extra_fields)
-
-    log_path = get_log_file_path(log_dir)
-    with open(log_path, "a", encoding="utf-8") as f:
-        f.write(json.dumps(log_entry, ensure_ascii=False) + "\n")
-    return log_path  # 可选返回路径
+# 添加全局函数，便于主流程调用
+def log_conversation(user_text: str, bot_text: str, extra_fields: dict = None):
+    logger = ChatLogger()
+    tags = [f"{extra_fields.get('emotion')}", f"{extra_fields.get('keyword')}"] if extra_fields else None
+    logger.log(
+        role="user", content=user_text, tags=tags, topic="聊天"
+    )
+    logger.log(
+        role="bot", content=bot_text, tags=tags, topic="聊天"
+    )
+    logger.close()

@@ -1,14 +1,14 @@
 import requests
-import json
-import os
+from config.config import API_URL, HISTORY_LIMIT_FOR_SUMMARY
+from function.summary.summary_db import SummaryDB
 from datetime import datetime
-from config.config import SUMMARY_LOG_PATH,API_URL,HISTORY_LIMIT_FOR_SUMMARY
 
+try:
+    from emotion_utils import detect_emotion
+except ImportError:
+    detect_emotion = None
 
 def summarize_chat_history(chat_history: list[str], api_url: str = API_URL) -> str:
-    """
-    使用本地模型压缩聊天历史为摘要
-    """
     if len(chat_history) < HISTORY_LIMIT_FOR_SUMMARY:
         return ""
 
@@ -30,68 +30,29 @@ def summarize_chat_history(chat_history: list[str], api_url: str = API_URL) -> s
 
     if response.status_code == 200:
         try:
-            content = response.json().get("content", "").strip()
+            return response.json().get("content", "").strip()
         except Exception as e:
             print("[解析失败]", e, response.text)
-            content = ""
-        return content
+            return ""
     else:
         print("❌ 总结失败：", response.status_code, response.text)
         return ""
 
-def save_summary_to_log(summary: str, emotion: str = ""):
-    """
-    将总结写入 summary_log.json，并附带时间戳与情绪标签
-    """
-    if not summary:
-        return
-
-    entry = {
-        "timestamp": datetime.now().isoformat(),
-        "summary": summary,
-        "emotion": emotion or ""
-    }
-
-    if os.path.exists(SUMMARY_LOG_PATH):
-        with open(SUMMARY_LOG_PATH, "r", encoding="utf-8") as f:
-            log = json.load(f)
-    else:
-        log = []
-
-    log.append(entry)
-
-    with open(SUMMARY_LOG_PATH, "w", encoding="utf-8") as f:
-        json.dump(log, f, ensure_ascii=False, indent=2)
-
-def load_latest_summary() -> str:
-    """
-    读取最新一条摘要，用于嵌入系统提示
-    """
-    if not os.path.exists(SUMMARY_LOG_PATH):
-        return ""
-    with open(SUMMARY_LOG_PATH, "r", encoding="utf-8") as f:
-        log = json.load(f)
-    if not log:
-        return ""
-    return log[-1]["summary"]
-
-# 可选：集成情绪检测模块（如果已存在）
-try:
-    from emotion_utils import detect_emotion
-except ImportError:
-    detect_emotion = None
-
-def summarize_and_store(chat_history: list[str]):
-    """
-    主调用入口：总结并保存摘要和情绪
-    """
+def summarize_and_store(chat_history: list[str]) -> str:
     summary = summarize_chat_history(chat_history)
     if not summary:
         return ""
 
-    emotion = ""
-    if detect_emotion:
-        emotion = detect_emotion(summary)
+    emotion = detect_emotion(summary) if detect_emotion else ""
 
-    save_summary_to_log(summary, emotion)
+    db = SummaryDB()
+    db.save(summary=summary, emotion=emotion)
+    db.close()
+
     return summary
+
+def load_latest_summary() -> str:
+    db = SummaryDB()
+    latest = db.load_latest() or ""
+    db.close()
+    return latest

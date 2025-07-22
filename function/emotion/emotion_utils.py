@@ -1,5 +1,4 @@
-import re
-from function.emotion.emotion_words import load_emotion_words
+from function.emotion.emotion_dict_db import EmotionDictionaryDB
 
 class EmotionTracker:
     def __init__(self):
@@ -9,12 +8,12 @@ class EmotionTracker:
             "neutral": 0
         }
         self.latest_keyword = None
-        self.emotion_words = load_emotion_words()
+
+        db = EmotionDictionaryDB()
+        self.emotion_words = db.load_emotion_words()
+        db.close()
 
     def detect_emotion(self, text: str):
-        """
-        支持多情绪词检测，返回主导情绪和所有命中关键词
-        """
         found_keywords = {"positive": [], "negative": [], "neutral": []}
 
         for category, words in self.emotion_words.items():
@@ -22,11 +21,9 @@ class EmotionTracker:
                 if word in text:
                     found_keywords[category].append(word)
 
-        # 更新统计计数
-        for category in ["positive", "negative", "neutral"]:
+        for category in found_keywords:
             self.emotion_count[category] += len(found_keywords[category])
 
-        # 判断主导情绪
         dominant = max(found_keywords.items(), key=lambda x: len(x[1]))
         dominant_emotion = dominant[0] if dominant[1] else "neutral"
         self.latest_keyword = dominant[1][0] if dominant[1] else None
@@ -39,9 +36,5 @@ class EmotionTracker:
         )
 
     def reset(self):
-        self.emotion_count = {
-            "positive": 0,
-            "negative": 0,
-            "neutral": 0
-        }
+        self.emotion_count = {"positive": 0, "negative": 0, "neutral": 0}
         self.latest_keyword = None

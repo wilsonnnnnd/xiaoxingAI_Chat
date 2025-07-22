@@ -4,27 +4,16 @@ import os
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CONFIG_DIR = os.path.join(BASE_DIR, "config")
 MEMORY_DIR = os.path.join(BASE_DIR, "memory")
-STORE_DIR = os.path.join(MEMORY_DIR, "store")
 AUDIO_DIR = os.path.join(MEMORY_DIR, "audio")
-LOG_DIR = os.path.join(MEMORY_DIR, "logs")
-SPEAK_LOG_DIR = os.path.join(MEMORY_DIR, "speak")
 REPORT_DIR = os.path.join(MEMORY_DIR, "report")
+DB_PATH = os.path.join(BASE_DIR, "db", "xiaoxing_memory.db")
 
 # json configuration files
-KEYWORD_MAP_PATH = os.path.join(CONFIG_DIR, "keyword_map.json")
-TEMPLATE_PATH = os.path.join(CONFIG_DIR, "templates.json")
-EMOTION_WORDS_PATH = os.path.join(CONFIG_DIR, "emotion_words.json")
-SPEECH_STYLE_PATH = os.path.join(CONFIG_DIR, "speech_styles.json")
-STOP_WORDS_PATH = os.path.join(CONFIG_DIR, "stop_words.json")
 PROMPT_PATH = os.path.join(CONFIG_DIR, "prompt.txt")
-PREFERENCE_RULES_PATH = os.path.join(CONFIG_DIR, "preference_rules.json")
 # storage and logs
-MEMORY_PATH = os.path.join(STORE_DIR, "memory_store.json")
-SUMMARY_LOG_PATH = os.path.join(STORE_DIR, "summary_log.json")
-LOG_SPEECH_PATH = os.path.join(SPEAK_LOG_DIR, "speak_log.jsonl")
-MARKDOWN_DIR = os.path.join(SPEAK_LOG_DIR, "speak_markdown")
-CHART_OUTPUT_DIR = REPORT_DIR
-DEFAULT_LOG_DIR = LOG_DIR
+
+CHART_OUTPUT_DIR = os.path.join(REPORT_DIR, "charts")
+MARKDOWN_DIR = os.path.join("data", "markdown")
 
 # API
 URL="http://127.0.0.1:8000"
@@ -53,3 +42,8 @@ WORD_FONT_PATH = "simhei.ttf" # 中文字体路径
 
 # emotion tracking
 FUZZY_THRESHOLD = 0.75  # 模糊匹配相似度阈值
+
+
+# 每日调度时间（24小时制）
+SUMMARY_SCHEDULE_TIME = "23:00"
+SPEECH_REPORT_SCHEDULE_TIME = "23:30"

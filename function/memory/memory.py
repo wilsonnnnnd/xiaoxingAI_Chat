@@ -1,49 +1,45 @@
+# memory/memory.py
+import sqlite3
 import json
-import os
-
+from typing import List, Optional
+from config.config import DB_PATH
 
 class Memory:
-    def __init__(self, file_path):
-        self.file_path = file_path
-        self.data = {
-            "facts": {},
-            "emotions": {}
-        }
-        self.load()
+    def __init__(self, db_path=DB_PATH):
+        self.conn = sqlite3.connect(db_path)
+        self.conn.row_factory = sqlite3.Row
 
-    def load(self):
-        if os.path.exists(self.file_path):
-            try:
-                with open(self.file_path, "r", encoding="utf-8") as f:
-                    loaded = json.load(f)
-                    self.data["facts"] = loaded.get("facts", {})
-                    self.data["emotions"] = loaded.get("emotions", {})
-            except Exception as e:
-                print("[Memory Load Error]", e)
+    def add(self, chat_log_id: int, keyword: str, value: str,
+            topic: Optional[str] = None,
+            tags: Optional[List[str]] = None,
+            source: Optional[str] = None):
+        tags_json = json.dumps(tags) if tags else None
+        self.conn.execute("""
+            INSERT OR IGNORE INTO memory (chat_log_id, keyword, value, topic, tags, source)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (chat_log_id, keyword, value, topic, tags_json, source))
+        self.conn.commit()
 
-    def save(self):
-        try:
-            with open(self.file_path, "w", encoding="utf-8") as f:
-                json.dump(self.data, f, ensure_ascii=False, indent=2)
-        except Exception as e:
-            print("[Memory Save Error]", e)
+    def recall(self, keyword: str) -> List[dict]:
+        cursor = self.conn.execute("""
+            SELECT keyword, value, topic, tags, source, created_at
+            FROM memory
+            WHERE keyword = ? AND is_deleted = 0
+            ORDER BY created_at DESC
+        """, (keyword,))
+        return [dict(row) for row in cursor.fetchall()]
 
-    def remember(self, key, value):
-        self.data["facts"][key] = value
-        self.save()
+    def recall_latest(self, keyword: str) -> Optional[str]:
+        facts = self.recall(keyword)
+        if facts:
+            return facts[0]["value"]
+        return None
 
-    def recall(self, key):
-        return self.data["facts"].get(key, "")
+    def forget(self, keyword: str):
+        self.conn.execute("""
+            UPDATE memory SET is_deleted = 1 WHERE keyword = ?
+        """, (keyword,))
+        self.conn.commit()
 
-    def save_emotion(self, keyword, emotion):
-        self.data["emotions"][keyword] = emotion
-        self.save()
-
-    def recall_emotion(self, keyword):
-        return self.data["emotions"].get(keyword, "")
-
-    def get_all_memory(self):
-        return self.data["facts"]
-
-    def get_all_emotions(self):
-        return self.data["emotions"]
+    def close(self):
+        self.conn.close()

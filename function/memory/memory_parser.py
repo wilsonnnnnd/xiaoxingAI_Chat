@@ -1,6 +1,20 @@
 import re
-from config.config import KEYWORD_MAP_PATH, TEMPLATE_PATH
+import sqlite3
+from config.config import DB_PATH
 
+def load_keyword_map() -> dict:
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.execute("SELECT keyword, field FROM preference_keyword_map")
+    result = {row[0]: row[1] for row in cursor.fetchall()}
+    conn.close()
+    return result
+
+def load_templates() -> list:
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.execute("SELECT pattern FROM preference_template")
+    templates = [row[0] for row in cursor.fetchall()]
+    conn.close()
+    return templates
 
 def extract_memory(text: str, keyword_map_override=None, templates_override=None):
     """
@@ -13,8 +27,8 @@ def extract_memory(text: str, keyword_map_override=None, templates_override=None
         List[Tuple[field_name, value]]
     """
     results = []
-    local_map = keyword_map_override or KEYWORD_MAP_PATH
-    local_templates = templates_override or TEMPLATE_PATH
+    local_map = keyword_map_override or load_keyword_map()
+    local_templates = templates_override or load_templates()
 
     for key, field in local_map.items():
         for template in local_templates:
