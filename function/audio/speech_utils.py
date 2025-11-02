@@ -10,8 +10,93 @@ import subprocess
 from edge_tts import Communicate
 from config.config import DEFAULT_RATE, DEFAULT_STYLE, DEFAULT_VOICE, DEFAULT_VOLUME, AUDIO_DIR, MIN_AUDIO_FILE_SIZE
 from function.audio.speech_logger import log_speech_to_db
+import shutil
+import importlib
+import ctypes
 
 speak_queue = queue.Queue()
+active_players = []
+
+
+def _ensure_vlc_loaded(candidate_paths=None):
+    try:
+        import vlc
+        return vlc
+    except Exception:
+        pass
+
+    if candidate_paths is None:
+        candidate_paths = []
+    env_vlc = os.environ.get('VLC_PATH')
+    if env_vlc:
+        candidate_paths.append(env_vlc)
+    pf = os.environ.get('ProgramFiles')
+    pf86 = os.environ.get('ProgramFiles(x86)')
+    if pf:
+        candidate_paths.append(os.path.join(pf, 'VideoLAN', 'VLC'))
+    if pf86:
+        candidate_paths.append(os.path.join(pf86, 'VideoLAN', 'VLC'))
+    candidate_paths.append(r'E:\Program Files (x86)\VideoLAN\VLC')
+
+    for cand in candidate_paths:
+        try:
+            if not cand or not os.path.isdir(cand):
+                continue
+            try:
+                if hasattr(os, 'add_dll_directory'):
+                    os.add_dll_directory(cand)
+            except Exception:
+                pass
+            try:
+                import vlc
+                return vlc
+            except Exception:
+                dll_path = os.path.join(cand, 'libvlc.dll')
+                if os.path.exists(dll_path):
+                    try:
+                        ctypes.CDLL(dll_path)
+                        import vlc
+                        return vlc
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+    raise ImportError('python-vlc / libvlc not found')
+
+
+def _player_cleaner():
+    while True:
+        try:
+            for p in list(active_players):
+                try:
+                    if hasattr(p, 'get_state'):
+                        try:
+                            import vlc as _vlc
+                            state = p.get_state()
+                            if state in (_vlc.State.Ended, _vlc.State.Error, _vlc.State.Stopped):
+                                active_players.remove(p)
+                                continue
+                        except Exception:
+                            pass
+                    if hasattr(p, 'is_playing'):
+                        try:
+                            if not p.is_playing():
+                                active_players.remove(p)
+                                continue
+                        except Exception:
+                            try:
+                                active_players.remove(p)
+                            except ValueError:
+                                pass
+                except Exception:
+                    try:
+                        active_players.remove(p)
+                    except ValueError:
+                        pass
+            time.sleep(2)
+        except Exception:
+            time.sleep(2)
+
 
 def _start_speak_worker():
     def worker():
@@ -20,16 +105,73 @@ def _start_speak_worker():
             if not audio_path:
                 continue
             try:
-                if platform.system() == "Windows":
-                    subprocess.run(["start", "", audio_path], shell=True)
-                elif platform.system() == "Darwin":
-                    subprocess.run(["afplay", audio_path])
+                system = platform.system()
+                if system == 'Windows':
+                    # 1) python-vlc
+                    try:
+                        vlc = _ensure_vlc_loaded()
+                        instance = vlc.Instance('--intf', 'dummy', '--no-video')
+                        media = instance.media_new(audio_path)
+                        player = instance.media_player_new()
+                        player.set_media(media)
+                        player.play()
+                        active_players.append(player)
+                        continue
+                    except Exception as e_vlc:
+                            pass
+
+                    # 2) pydub + simpleaudio
+                    try:
+                        from pydub import AudioSegment
+                        import simpleaudio as sa
+                        seg = AudioSegment.from_file(audio_path)
+                        play_obj = sa.play_buffer(seg.raw_data, seg.channels, seg.sample_width, seg.frame_rate)
+                        active_players.append(play_obj)
+                        continue
+                    except Exception as e_pa:
+                            pass
+
+                    # 3) ffplay / mpv
+                    try:
+                        ffplay = shutil.which('ffplay')
+                        mpv = shutil.which('mpv')
+                        if ffplay:
+                            subprocess.Popen([ffplay, '-nodisp', '-autoexit', '-loglevel', 'quiet', audio_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                            continue
+                        elif mpv:
+                            subprocess.Popen([mpv, '--no-terminal', '--really-quiet', '--idle=no', audio_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                            continue
+                    except Exception as e_ff:
+                            pass
+
+                    # fallback: os.startfile
+                    try:
+                        os.startfile(audio_path)
+                    except Exception:
+                        subprocess.Popen(f'start "" "{audio_path}"', shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+                elif system == 'Darwin':
+                    subprocess.Popen(['afplay', audio_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 else:
-                    subprocess.run(["mpg123", audio_path])
+                    try:
+                        subprocess.Popen(['mpg123', audio_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    except FileNotFoundError:
+                        ffplay = shutil.which('ffplay')
+                        mpv = shutil.which('mpv')
+                        if ffplay:
+                            subprocess.Popen([ffplay, '-nodisp', '-autoexit', '-loglevel', 'quiet', audio_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                        elif mpv:
+                            subprocess.Popen([mpv, '--no-terminal', '--really-quiet', '--idle=no', audio_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                        else:
+                            subprocess.Popen(['xdg-open', audio_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             except Exception as e:
-                print(f"[❌ 播放出错] {e}")
-            speak_queue.task_done()
+                    pass
+            finally:
+                speak_queue.task_done()
+
+    threading.Thread(target=_player_cleaner, daemon=True).start()
     threading.Thread(target=worker, daemon=True).start()
+
 
 _start_speak_worker()
 
