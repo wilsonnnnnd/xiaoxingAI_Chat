@@ -31,20 +31,6 @@ jobs:
             git fetch origin main
             git reset --hard origin/main
 
-      - name: Install backend dependencies
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.HOST }}
-          username: ${{ secrets.USERNAME }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: ${{ secrets.PORT }}
-          script_stop: true
-          script: |
-            set -e
-            cd /home/weimeng/xiaoxingAI
-            source /home/weimeng/xiaoxingAI/.venv/bin/activate
-            pip install -r requirements.txt
-
       - name: Build frontend
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -78,18 +64,6 @@ jobs:
             sudo chown -R www-data:www-data /var/www/xiaoxing
             sudo chmod -R 755 /var/www/xiaoxing
 
-      - name: Restart backend
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.HOST }}
-          username: ${{ secrets.USERNAME }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: ${{ secrets.PORT }}
-          script_stop: true
-          script: |
-            set -e
-            sudo systemctl restart xiaoxing
-
       - name: Reload nginx
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -103,38 +77,6 @@ jobs:
             sudo nginx -t
             sudo systemctl reload nginx
 
-      - name: Check backend health
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.HOST }}
-          username: ${{ secrets.USERNAME }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: ${{ secrets.PORT }}
-          script_stop: true
-          script: |
-            set -e
-            for i in {1..15}; do
-              if curl -fsS http://127.0.0.1:8000/health; then
-                echo "Backend is ready"
-                exit 0
-              fi
-              echo "Waiting for backend... ($i)"
-              sleep 2
-            done
-            echo "Backend health check failed"
-            exit 1
-
-      - name: Show backend service status
-        if: always()
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.HOST }}
-          username: ${{ secrets.USERNAME }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: ${{ secrets.PORT }}
-          script: |
-            sudo systemctl status xiaoxing --no-pager
-
       - name: Check public HTTPS
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -147,7 +89,7 @@ jobs:
             set -e
             curl -I https://xiaoxingai.online
 
-      - name: Stop backend
+      - name: Stop backend, database, and Redis
         if: always()
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -158,5 +100,9 @@ jobs:
           script_stop: true
           script: |
             set -e
-            sudo systemctl stop xiaoxing
+            sudo systemctl stop xiaoxing || true
+            sudo systemctl stop postgresql || true
+            sudo systemctl stop redis-server || sudo systemctl stop redis || true
             sudo systemctl status xiaoxing --no-pager || true
+            sudo systemctl status postgresql --no-pager || true
+            sudo systemctl status redis-server --no-pager || sudo systemctl status redis --no-pager || true
