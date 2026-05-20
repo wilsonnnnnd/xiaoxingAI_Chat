@@ -146,3 +146,17 @@ jobs:
           script: |
             set -e
             curl -I https://xiaoxingai.online
+
+      - name: Stop backend
+        if: always()
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.PORT }}
+          script_stop: true
+          script: |
+            set -e
+            sudo systemctl stop xiaoxing
+            sudo systemctl status xiaoxing --no-pager || true
